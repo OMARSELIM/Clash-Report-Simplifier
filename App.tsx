@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Layers, FileSpreadsheet, Activity, ChevronRight, AlertCircle, RefreshCw } from 'lucide-react';
+import { Layers, FileSpreadsheet, Activity, ChevronRight, AlertCircle, RefreshCw, Settings2, List } from 'lucide-react';
 import { ClashItem, ProcessingState } from './types';
 import { parseNavisworksXML } from './services/xmlParser';
 import { classifyLayers } from './services/geminiService';
@@ -11,6 +11,8 @@ function App() {
   const [clashData, setClashData] = useState<ClashItem[]>([]);
   const [processState, setProcessState] = useState<ProcessingState>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [customDisciplines, setCustomDisciplines] = useState<string>('');
+  const [layerMappingInput, setLayerMappingInput] = useState<string>('');
 
   const handleFileSelect = async (file: File) => {
     setProcessState('parsing');
@@ -37,10 +39,32 @@ function App() {
       
       const layerList = Array.from(allLayers);
       
-      // 3. AI Classification
-      const classificationMap = await classifyLayers(layerList);
+      // 3. Prepare Configuration
+      // Parse custom disciplines
+      const disciplinesList = customDisciplines
+        .split(',')
+        .map(d => d.trim())
+        .filter(d => d.length > 0);
+
+      // Parse layer overrides
+      const overrides: Record<string, string> = {};
+      if (layerMappingInput.trim()) {
+        layerMappingInput.split('\n').forEach(line => {
+          const separatorIdx = line.indexOf(':');
+          if (separatorIdx > 0) {
+            const key = line.substring(0, separatorIdx).trim();
+            const val = line.substring(separatorIdx + 1).trim();
+            if (key && val) {
+              overrides[key] = val;
+            }
+          }
+        });
+      }
+
+      // 4. AI Classification
+      const classificationMap = await classifyLayers(layerList, disciplinesList, overrides);
       
-      // 4. Merge Data
+      // 5. Merge Data
       const enrichedItems = parsedItems.map(item => ({
         ...item,
         discipline1: classificationMap[item.layer1] || 'Unclassified',
@@ -101,6 +125,50 @@ function App() {
                 and generate a clean, exportable Excel-ready dashboard.
               </p>
             </div>
+
+            {/* Configuration Panel */}
+            <div className="mb-8 bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
+              
+              {/* Custom Disciplines */}
+              <div>
+                <div className="flex items-center gap-2 mb-2 text-slate-800 font-semibold text-sm">
+                  <Settings2 size={16} />
+                  <label htmlFor="disciplines">Custom Disciplines (Optional)</label>
+                </div>
+                <textarea 
+                  id="disciplines"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all resize-none"
+                  rows={2}
+                  placeholder="e.g. Structure, HVAC, Piping, Elec, Arch (Leave empty to use standard BIM disciplines)"
+                  value={customDisciplines}
+                  onChange={(e) => setCustomDisciplines(e.target.value)}
+                />
+                <p className="text-xs text-slate-500 mt-2">
+                  Gemini will categorize your layers into these specific groups.
+                </p>
+              </div>
+
+              {/* Layer Mapping Overrides */}
+              <div className="pt-4 border-t border-slate-100">
+                <div className="flex items-center gap-2 mb-2 text-slate-800 font-semibold text-sm">
+                  <List size={16} />
+                  <label htmlFor="overrides">Layer Mapping Overrides (Optional)</label>
+                </div>
+                <textarea 
+                  id="overrides"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all resize-none font-mono"
+                  rows={3}
+                  placeholder={`A-WALL: Architectural\nS-COLS: Structural\nE-LITE: Electrical`}
+                  value={layerMappingInput}
+                  onChange={(e) => setLayerMappingInput(e.target.value)}
+                />
+                <p className="text-xs text-slate-500 mt-2">
+                  Force specific layers to a discipline. Format: <code>Layer Name : Discipline</code> (one per line).
+                </p>
+              </div>
+
+            </div>
+
             <FileUpload onFileSelect={handleFileSelect} isProcessing={false} />
             
             <div className="mt-8 grid grid-cols-3 gap-4 text-center">
@@ -132,7 +200,7 @@ function App() {
             <p className="text-slate-500 mt-2">
               {processState === 'parsing' 
                 ? 'Reading geometric data and object names.' 
-                : 'Analyzing layer names with Gemini to determine disciplines (Mech, Struct, Elec)...'}
+                : 'Analyzing layer names with Gemini to determine disciplines...'}
             </p>
           </div>
         )}

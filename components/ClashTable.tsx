@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ClashItem } from '../types';
-import { Download, Filter, Search } from 'lucide-react';
+import { Download, Filter, Search, Copy, Check } from 'lucide-react';
 
 interface ClashTableProps {
   data: ClashItem[];
@@ -9,6 +9,7 @@ interface ClashTableProps {
 const ClashTable: React.FC<ClashTableProps> = ({ data }) => {
   const [filter, setFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const filteredData = data.filter(item => {
     const matchesText = 
@@ -50,6 +51,13 @@ const ClashTable: React.FC<ClashTableProps> = ({ data }) => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const handleCopyCoords = (id: string, x: number, y: number, z: number) => {
+    const text = `${x.toFixed(3)}, ${y.toFixed(3)}, ${z.toFixed(3)}`;
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
   };
 
   const getStatusBadge = (status: string) => {
@@ -110,6 +118,7 @@ const ClashTable: React.FC<ClashTableProps> = ({ data }) => {
               <th className="px-6 py-3 font-medium">Item 1 (Discipline)</th>
               <th className="px-6 py-3 font-medium">Item 2 (Discipline)</th>
               <th className="px-6 py-3 font-medium">Grid</th>
+              <th className="px-6 py-3 font-medium">Coords (X,Y,Z)</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -135,6 +144,20 @@ const ClashTable: React.FC<ClashTableProps> = ({ data }) => {
                   </div>
                 </td>
                 <td className="px-6 py-4 text-gray-500">{item.gridLocation || '-'}</td>
+                <td className="px-6 py-4">
+                  <button 
+                    onClick={() => handleCopyCoords(item.id, item.point.x, item.point.y, item.point.z)}
+                    className="flex items-center gap-2 text-xs font-mono text-gray-500 hover:text-blue-600 hover:bg-blue-50 px-2 py-1 rounded transition-colors group border border-transparent hover:border-blue-100"
+                    title="Click to copy X,Y,Z"
+                  >
+                    <span>{item.point.x.toFixed(2)}, {item.point.y.toFixed(2)}, {item.point.z.toFixed(2)}</span>
+                    {copiedId === item.id ? (
+                        <Check size={14} className="text-green-600" />
+                    ) : (
+                        <Copy size={14} className="opacity-0 group-hover:opacity-100 transition-opacity text-blue-400" />
+                    )}
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
