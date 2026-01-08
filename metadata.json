@@ -1,0 +1,5 @@
+{
+  "name": "Clash Report Simplifier",
+  "description": "Transforms complex Navisworks XML clash reports into intelligent, categorized dashboards and exportable spreadsheets using Gemini AI for discipline recognition.",
+  "requestFramePermissions": []
+}
