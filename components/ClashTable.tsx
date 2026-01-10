@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { ClashItem } from '../types';
-import { Download, Filter, Search, Copy, Check } from 'lucide-react';
+import { Download, Filter, Search, Copy, Check, FileJson } from 'lucide-react';
 
 interface ClashTableProps {
   data: ClashItem[];
@@ -9,7 +9,20 @@ interface ClashTableProps {
 const ClashTable: React.FC<ClashTableProps> = ({ data }) => {
   const [filter, setFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [discipline1Filter, setDiscipline1Filter] = useState('All');
+  const [discipline2Filter, setDiscipline2Filter] = useState('All');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Extract unique disciplines for dropdowns
+  const disciplineOptions1 = useMemo(() => {
+    const unique = new Set(data.map(item => item.discipline1 || 'Unclassified'));
+    return Array.from(unique).sort();
+  }, [data]);
+
+  const disciplineOptions2 = useMemo(() => {
+    const unique = new Set(data.map(item => item.discipline2 || 'Unclassified'));
+    return Array.from(unique).sort();
+  }, [data]);
 
   const filteredData = data.filter(item => {
     const matchesText = 
@@ -19,35 +32,66 @@ const ClashTable: React.FC<ClashTableProps> = ({ data }) => {
     
     const matchesStatus = statusFilter === 'All' || item.status === statusFilter;
     
-    return matchesText && matchesStatus;
+    const d1 = item.discipline1 || 'Unclassified';
+    const matchesDisc1 = discipline1Filter === 'All' || d1 === discipline1Filter;
+
+    const d2 = item.discipline2 || 'Unclassified';
+    const matchesDisc2 = discipline2Filter === 'All' || d2 === discipline2Filter;
+    
+    return matchesText && matchesStatus && matchesDisc1 && matchesDisc2;
   });
 
   const exportToCSV = () => {
+    // Helper to escape CSV fields properly: 
+    // - Wraps in quotes if contains comma, newline, or double quote
+    // - Escapes double quotes by doubling them (" -> "")
+    const formatField = (field: any) => {
+      if (field === null || field === undefined) return '';
+      const stringValue = String(field);
+      if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+        return `"${stringValue.replace(/"/g, '""')}"`;
+      }
+      return stringValue;
+    };
+
     // BOM for Excel utf-8 compatibility
     const bom = "\uFEFF";
     const headers = ["ID", "Name", "Status", "Distance", "Grid", "Item 1 Layer", "Item 1 Discipline", "Item 2 Layer", "Item 2 Discipline", "X", "Y", "Z"];
     
     const csvRows = filteredData.map(item => [
       item.id,
-      `"${item.name}"`, // Quote strings to handle commas
+      item.name,
       item.status,
       item.distance,
       item.gridLocation,
-      `"${item.layer1}"`,
+      item.layer1,
       item.discipline1 || "Unknown",
-      `"${item.layer2}"`,
+      item.layer2,
       item.discipline2 || "Unknown",
       item.point.x,
       item.point.y,
       item.point.z
-    ].join(","));
+    ].map(formatField).join(","));
 
-    const csvString = bom + headers.join(",") + "\n" + csvRows.join("\n");
+    const csvString = bom + headers.map(formatField).join(",") + "\n" + csvRows.join("\n");
+    
     const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
     link.setAttribute("download", "clash_report_simplified.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const exportToJSON = () => {
+    const jsonString = JSON.stringify(filteredData, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", "clash_report_simplified.json");
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -66,6 +110,7 @@ const ClashTable: React.FC<ClashTableProps> = ({ data }) => {
       'Resolved': 'bg-green-100 text-green-800',
       'Approved': 'bg-blue-100 text-blue-800',
       'New': 'bg-yellow-100 text-yellow-800',
+      'Reviewed': 'bg-purple-100 text-purple-800',
     };
     return styles[status] || 'bg-gray-100 text-gray-800';
   };
@@ -73,8 +118,11 @@ const ClashTable: React.FC<ClashTableProps> = ({ data }) => {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
       {/* Header Controls */}
-      <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row gap-4 justify-between items-center bg-gray-50/50">
-        <div className="flex items-center gap-2 w-full sm:w-auto">
+      <div className="p-4 border-b border-gray-100 flex flex-col xl:flex-row gap-4 justify-between items-start xl:items-center bg-gray-50/50">
+        
+        {/* Filters Container */}
+        <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
+          {/* Text Search */}
           <div className="relative w-full sm:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
             <input 
@@ -85,26 +133,63 @@ const ClashTable: React.FC<ClashTableProps> = ({ data }) => {
               onChange={(e) => setFilter(e.target.value)}
             />
           </div>
+
+          {/* Status Filter */}
           <select 
-            className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 max-w-[150px]"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
           >
-            <option value="All">All Status</option>
-            <option value="Active">Active</option>
+            <option value="All">Select All</option>
             <option value="New">New</option>
-            <option value="Resolved">Resolved</option>
+            <option value="Active">Active</option>
+            <option value="Reviewed">Reviewed</option>
             <option value="Approved">Approved</option>
+            <option value="Resolved">Resolved</option>
+          </select>
+
+          {/* Discipline 1 Filter */}
+          <select 
+            className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 max-w-[150px]"
+            value={discipline1Filter}
+            onChange={(e) => setDiscipline1Filter(e.target.value)}
+          >
+            <option value="All">Select All</option>
+            {disciplineOptions1.map(d => (
+              <option key={d} value={d}>{d}</option>
+            ))}
+          </select>
+
+          {/* Discipline 2 Filter */}
+          <select 
+            className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 max-w-[150px]"
+            value={discipline2Filter}
+            onChange={(e) => setDiscipline2Filter(e.target.value)}
+          >
+            <option value="All">Select All</option>
+            {disciplineOptions2.map(d => (
+              <option key={d} value={d}>{d}</option>
+            ))}
           </select>
         </div>
 
-        <button 
-          onClick={exportToCSV}
-          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors shadow-sm"
-        >
-          <Download className="w-4 h-4" />
-          Export Excel (CSV)
-        </button>
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+          <button 
+            onClick={exportToJSON}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 hover:text-gray-900 transition-colors shadow-sm"
+          >
+            <FileJson className="w-4 h-4" />
+            JSON
+          </button>
+          <button 
+            onClick={exportToCSV}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors shadow-sm"
+          >
+            <Download className="w-4 h-4" />
+            CSV
+          </button>
+        </div>
       </div>
 
       {/* Table */}
@@ -150,11 +235,11 @@ const ClashTable: React.FC<ClashTableProps> = ({ data }) => {
                     className="flex items-center gap-2 text-xs font-mono text-gray-500 hover:text-blue-600 hover:bg-blue-50 px-2 py-1 rounded transition-colors group border border-transparent hover:border-blue-100"
                     title="Click to copy X,Y,Z"
                   >
-                    <span>{item.point.x.toFixed(2)}, {item.point.y.toFixed(2)}, {item.point.z.toFixed(2)}</span>
+                    <span>{item.point.x.toFixed(3)}, {item.point.y.toFixed(3)}, {item.point.z.toFixed(3)}</span>
                     {copiedId === item.id ? (
                         <Check size={14} className="text-green-600" />
                     ) : (
-                        <Copy size={14} className="opacity-0 group-hover:opacity-100 transition-opacity text-blue-400" />
+                        <Copy size={14} className="text-gray-400" />
                     )}
                   </button>
                 </td>

@@ -14,6 +14,9 @@ function App() {
   const [customDisciplines, setCustomDisciplines] = useState<string>('');
   const [layerMappingInput, setLayerMappingInput] = useState<string>('');
 
+  // Check for API Key availability
+  const isApiKeyMissing = !process.env.API_KEY;
+
   const handleFileSelect = async (file: File) => {
     setProcessState('parsing');
     setErrorMsg(null);
@@ -126,11 +129,25 @@ function App() {
               </p>
             </div>
 
+            {/* API Key Warning */}
+            {isApiKeyMissing && (
+              <div className="mb-6 bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <h4 className="text-sm font-semibold text-amber-800">AI Classification Unavailable</h4>
+                  <p className="text-sm text-amber-700 mt-1">
+                    System is running in offline mode. Clashes will be processed, but automatic discipline detection is disabled without an API key. 
+                    <br/><span className="text-xs text-amber-600/80">Check console for details on setting up <code>process.env.API_KEY</code>.</span>
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Configuration Panel */}
             <div className="mb-8 bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
               
               {/* Custom Disciplines */}
-              <div>
+              <div className={isApiKeyMissing ? 'opacity-50 pointer-events-none' : ''}>
                 <div className="flex items-center gap-2 mb-2 text-slate-800 font-semibold text-sm">
                   <Settings2 size={16} />
                   <label htmlFor="disciplines">Custom Disciplines (Optional)</label>
@@ -142,6 +159,7 @@ function App() {
                   placeholder="e.g. Structure, HVAC, Piping, Elec, Arch (Leave empty to use standard BIM disciplines)"
                   value={customDisciplines}
                   onChange={(e) => setCustomDisciplines(e.target.value)}
+                  disabled={isApiKeyMissing}
                 />
                 <p className="text-xs text-slate-500 mt-2">
                   Gemini will categorize your layers into these specific groups.
@@ -164,6 +182,7 @@ function App() {
                 />
                 <p className="text-xs text-slate-500 mt-2">
                   Force specific layers to a discipline. Format: <code>Layer Name : Discipline</code> (one per line).
+                  {isApiKeyMissing && <span className="font-semibold text-amber-600 block mt-1">This still works without an API Key.</span>}
                 </p>
               </div>
 
@@ -180,9 +199,11 @@ function App() {
                 <Activity className="w-6 h-6 text-blue-600 mx-auto mb-2" />
                 <span className="text-sm font-medium text-slate-700">Visual Dashboard</span>
               </div>
-              <div className="p-4 bg-white rounded-lg border border-slate-100 shadow-sm">
-                <Layers className="w-6 h-6 text-purple-600 mx-auto mb-2" />
-                <span className="text-sm font-medium text-slate-700">AI Sorting</span>
+              <div className={`p-4 bg-white rounded-lg border shadow-sm ${isApiKeyMissing ? 'bg-gray-50 border-gray-200' : 'border-slate-100'}`}>
+                <Layers className={`w-6 h-6 mx-auto mb-2 ${isApiKeyMissing ? 'text-gray-400' : 'text-purple-600'}`} />
+                <span className={`text-sm font-medium ${isApiKeyMissing ? 'text-gray-400' : 'text-slate-700'}`}>
+                  AI Sorting {isApiKeyMissing ? '(Disabled)' : ''}
+                </span>
               </div>
             </div>
           </div>
@@ -200,7 +221,9 @@ function App() {
             <p className="text-slate-500 mt-2">
               {processState === 'parsing' 
                 ? 'Reading geometric data and object names.' 
-                : 'Analyzing layer names with Gemini to determine disciplines...'}
+                : isApiKeyMissing 
+                  ? 'Applying manual overrides...'
+                  : 'Analyzing layer names with Gemini to determine disciplines...'}
             </p>
           </div>
         )}

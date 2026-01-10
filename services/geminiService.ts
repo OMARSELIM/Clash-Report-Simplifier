@@ -40,7 +40,16 @@ export const classifyLayers = async (
 
   // If no API key, we can only return what was overridden
   if (!process.env.API_KEY) {
-    console.warn("No API Key found. Returning only overridden classifications.");
+    console.warn(
+      "%c[Gemini Service] API Key Missing", "font-weight: bold; color: #f59e0b;",
+      "\n---------------------------------------------------------",
+      "\nAI classification features are currently disabled.",
+      "\nTo enable automatic discipline sorting:",
+      "\n1. Obtain a Google GenAI API Key.",
+      "\n2. Set the 'API_KEY' environment variable in your project.",
+      "\n---------------------------------------------------------",
+      "\nProceeding with manual overrides only."
+    );
     return finalMap;
   }
 
@@ -109,7 +118,7 @@ export const classifyLayers = async (
     return finalMap;
 
   } catch (error) {
-    console.error("Gemini classification failed:", error);
+    console.error("Gemini classification request failed. Proceeding with available manual overrides.", error);
     // Return whatever we have (overrides) even if AI failed
     return finalMap;
   }
