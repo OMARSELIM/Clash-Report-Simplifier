@@ -1,10 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { ClashItem } from '../types';
-import { Download, Filter, Search, Copy, Check, FileJson } from 'lucide-react';
+import { Download, Filter, Search, Copy, Check, FileJson, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 
 interface ClashTableProps {
   data: ClashItem[];
 }
+
+type SortKey = keyof ClashItem | 'point';
+type SortDirection = 'asc' | 'desc';
 
 const ClashTable: React.FC<ClashTableProps> = ({ data }) => {
   const [filter, setFilter] = useState('');
@@ -12,6 +15,7 @@ const ClashTable: React.FC<ClashTableProps> = ({ data }) => {
   const [discipline1Filter, setDiscipline1Filter] = useState('All');
   const [discipline2Filter, setDiscipline2Filter] = useState('All');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection } | null>(null);
 
   // Extract unique disciplines for dropdowns
   const disciplineOptions1 = useMemo(() => {
@@ -41,10 +45,50 @@ const ClashTable: React.FC<ClashTableProps> = ({ data }) => {
     return matchesText && matchesStatus && matchesDisc1 && matchesDisc2;
   });
 
+  const sortedData = useMemo(() => {
+    let sortableItems = [...filteredData];
+    if (sortConfig !== null) {
+      sortableItems.sort((a, b) => {
+        // Handle Point specially (sort by X)
+        if (sortConfig.key === 'point') {
+           const valA = a.point.x;
+           const valB = b.point.x;
+           if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+           if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+           return 0;
+        }
+
+        let aValue = a[sortConfig.key as keyof ClashItem];
+        let bValue = b[sortConfig.key as keyof ClashItem];
+        
+        // Handle undefined/null safely
+        if (!aValue && aValue !== 0) aValue = '';
+        if (!bValue && bValue !== 0) bValue = '';
+
+        if (typeof aValue === 'string') aValue = aValue.toLowerCase();
+        if (typeof bValue === 'string') bValue = bValue.toLowerCase();
+
+        if (aValue < bValue) {
+          return sortConfig.direction === 'asc' ? -1 : 1;
+        }
+        if (aValue > bValue) {
+          return sortConfig.direction === 'asc' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+    return sortableItems;
+  }, [filteredData, sortConfig]);
+
+  const requestSort = (key: SortKey) => {
+    let direction: SortDirection = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
   const exportToCSV = () => {
-    // Helper to escape CSV fields properly: 
-    // - Wraps in quotes if contains comma, newline, or double quote
-    // - Escapes double quotes by doubling them (" -> "")
     const formatField = (field: any) => {
       if (field === null || field === undefined) return '';
       const stringValue = String(field);
@@ -54,11 +98,10 @@ const ClashTable: React.FC<ClashTableProps> = ({ data }) => {
       return stringValue;
     };
 
-    // BOM for Excel utf-8 compatibility
     const bom = "\uFEFF";
     const headers = ["ID", "Name", "Status", "Distance", "Grid", "Item 1 Layer", "Item 1 Discipline", "Item 2 Layer", "Item 2 Discipline", "X", "Y", "Z"];
     
-    const csvRows = filteredData.map(item => [
+    const csvRows = sortedData.map(item => [
       item.id,
       item.name,
       item.status,
@@ -86,7 +129,7 @@ const ClashTable: React.FC<ClashTableProps> = ({ data }) => {
   };
 
   const exportToJSON = () => {
-    const jsonString = JSON.stringify(filteredData, null, 2);
+    const jsonString = JSON.stringify(sortedData, null, 2);
     const blob = new Blob([jsonString], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -114,6 +157,25 @@ const ClashTable: React.FC<ClashTableProps> = ({ data }) => {
     };
     return styles[status] || 'bg-gray-100 text-gray-800';
   };
+
+  const SortIcon = ({ columnKey }: { columnKey: SortKey }) => {
+    if (sortConfig?.key !== columnKey) return <ArrowUpDown size={14} className="text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity ml-1" />;
+    return sortConfig.direction === 'asc' 
+      ? <ArrowUp size={14} className="text-blue-600 ml-1" />
+      : <ArrowDown size={14} className="text-blue-600 ml-1" />;
+  };
+
+  const SortableHeader = ({ label, sortKey, className = "" }: { label: string, sortKey: SortKey, className?: string }) => (
+    <th 
+      className={`px-6 py-3 font-medium cursor-pointer group hover:bg-gray-50 transition-colors select-none ${className}`}
+      onClick={() => requestSort(sortKey)}
+    >
+      <div className="flex items-center gap-1">
+        {label}
+        <SortIcon columnKey={sortKey} />
+      </div>
+    </th>
+  );
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -197,17 +259,17 @@ const ClashTable: React.FC<ClashTableProps> = ({ data }) => {
         <table className="w-full text-sm text-left">
           <thead className="text-xs text-gray-500 uppercase bg-gray-50 border-b border-gray-100">
             <tr>
-              <th className="px-6 py-3 font-medium">Clash Name</th>
-              <th className="px-6 py-3 font-medium">Status</th>
-              <th className="px-6 py-3 font-medium">Distance</th>
-              <th className="px-6 py-3 font-medium">Item 1 (Discipline)</th>
-              <th className="px-6 py-3 font-medium">Item 2 (Discipline)</th>
-              <th className="px-6 py-3 font-medium">Grid</th>
-              <th className="px-6 py-3 font-medium">Coords (X,Y,Z)</th>
+              <SortableHeader label="Clash Name" sortKey="name" />
+              <SortableHeader label="Status" sortKey="status" />
+              <SortableHeader label="Distance" sortKey="distance" />
+              <SortableHeader label="Item 1 (Discipline)" sortKey="layer1" />
+              <SortableHeader label="Item 2 (Discipline)" sortKey="layer2" />
+              <SortableHeader label="Grid" sortKey="gridLocation" />
+              <SortableHeader label="Coords (X,Y,Z)" sortKey="point" />
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {filteredData.slice(0, 100).map((item) => (
+            {sortedData.slice(0, 100).map((item) => (
               <tr key={item.id} className="hover:bg-gray-50 transition-colors">
                 <td className="px-6 py-4 font-medium text-gray-900">{item.name}</td>
                 <td className="px-6 py-4">
@@ -247,12 +309,12 @@ const ClashTable: React.FC<ClashTableProps> = ({ data }) => {
             ))}
           </tbody>
         </table>
-        {filteredData.length > 100 && (
+        {sortedData.length > 100 && (
           <div className="px-6 py-4 text-center text-gray-500 text-xs bg-gray-50 border-t border-gray-100">
-            Showing first 100 of {filteredData.length} items. Export to see all.
+            Showing first 100 of {sortedData.length} items. Export to see all.
           </div>
         )}
-        {filteredData.length === 0 && (
+        {sortedData.length === 0 && (
            <div className="px-6 py-12 text-center text-gray-400">
              No clashes found matching your filters.
            </div>
