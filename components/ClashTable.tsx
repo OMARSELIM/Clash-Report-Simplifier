@@ -29,6 +29,7 @@ const ClashTable: React.FC<ClashTableProps> = ({ data }) => {
   }, [data]);
 
   const filteredData = data.filter(item => {
+    // Filter by Name, Layer 1, or Layer 2
     const matchesText = 
       item.name.toLowerCase().includes(filter.toLowerCase()) ||
       item.layer1.toLowerCase().includes(filter.toLowerCase()) ||
